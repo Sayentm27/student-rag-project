@@ -53,16 +53,24 @@ class ConversationHistory:
         #
         # Steps:
         #   1. Get the most recent messages:
-        #      recent = self.get_recent(MAX_HISTORY_TURNS * 2)
+        recent = self.get_recent(MAX_HISTORY_TURNS * 2)
         #      (Each "turn" = 1 user message + 1 assistant reply = 2 items)
         #
         #   2. For each message in recent, build a line:
         #      - If message["role"] == "user"      → "User: {message['content']}"
         #      - If message["role"] == "assistant"  → "Assistant: {message['content']}"
+        
+        lines = []
+        for message in recent:
+            if message["role"] == "user":
+                line = f"User: {message['content']}"
+            if message["role"] == "assistant":
+                line = f"Assistant: {message['content']}"
+            lines.append(line)
         #
         #   3. Join all lines with "\n" and return the result.
         #
-        return ""  # replace this with your implementation
+        return "\n".join(lines)  # replace this with your implementation
 
     def get_recent(self, n):
         """Return the last n messages."""
