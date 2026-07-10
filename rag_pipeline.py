@@ -159,6 +159,13 @@ def run_rag(query, conversation_history=None):
     #         "confidence": 0.0, "grounding": {}, "error": error_message}
     #   3. Clean up the query: query = sanitize_input(query)
     # ─────────────────────────────────────────────────────────────────────────
+    is_valid, error_message = validate_input(query)
+    if is_valid is not True:
+        return {
+            "answer": error_message, "sources": [], "distances": [],
+             "confidence": 0.0, "grounding": {}, "error": error_message
+        }
+        query = sanitize_input(query)
 
     # ── Week 15 TODO ──────────────────────────────────────────────────────────
     # Rewrite the query before retrieval to improve embedding quality.

@@ -13,7 +13,7 @@
 
 import re
 
-# TODO (Week 12): Fill in the BLOCKED_PATTERNS list.
+# (Week 12): Fill in the BLOCKED_PATTERNS list.
 #
 # --- The RAG/security concept ---
 # Think about what a prompt injection attack looks like.
@@ -27,6 +27,22 @@ import re
 BLOCKED_PATTERNS = [
     # Add your blocked phrases here (all lowercase)
     # Example: "ignore previous instructions",
+    "ignore previous instructions",
+    "claim a new identity",
+    "ask the model to forget its context",
+    "override the previous instructions",
+    "start issuing new instructions",
+    "change the model's behavior",
+    "change the model's context",
+    "change the model's instructions",
+    "change the model's behavior",
+    "you are now"
+    "act as"
+    "access unauthorized"
+    "pretend to be"
+    "override the previous instructions"
+    "override instructions"
+    "system prompt"    
 ]
 
 # Maximum allowed length for a user query.
@@ -42,7 +58,8 @@ def validate_input(query):
         (True, "")                    — query is safe, proceed
         (False, "error message")      — query is unsafe, show the error
     """
-    # TODO (Week 12): Implement three safety checks.
+    
+    # (Week 12): Implement three safety checks.
     #
     # --- The RAG/security concept ---
     # We validate at the system boundary — the moment user input enters our app.
@@ -52,17 +69,27 @@ def validate_input(query):
     # Check 1 — Empty input:
     #   If query is empty or only whitespace, the app would send a pointless
     #   API call. Return: (False, "Please enter a question before submitting.")
-    #
+
+    if len(query) == 0 or len(query.strip()) == 0:
+        return False, "Please enter a question before submitting."
+
     # Check 2 — Input too long:
     #   Long inputs cost more tokens and can be used to flood the context window.
     #   If len(query) > MAX_QUERY_LENGTH, return:
     #   (False, f"Your query is too long. Please keep it under {MAX_QUERY_LENGTH} characters.")
-    #
+    
+    if len(query) > MAX_QUERY_LENGTH:
+        return False, f"Your query is too long. Please keep it under {MAX_QUERY_LENGTH} characters."
+    
     # Check 3 — Prompt injection patterns:
     #   Convert the query to lowercase (query.lower()), then check whether any
     #   string from BLOCKED_PATTERNS appears inside it.
     #   If found, return: (False, "Your query contains content that cannot be processed.")
-    #
+    
+    query = query.lower()
+    if any(pattern in query for pattern in BLOCKED_PATTERNS):
+        return False, "Your query contains content that cannot be processed."
+    
     # If all three checks pass, return: (True, "")
     #
     return True, ""  # placeholder — replace with your implementation
