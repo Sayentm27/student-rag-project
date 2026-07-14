@@ -145,7 +145,7 @@ def run_rag(query, conversation_history=None):
       - "error":      Error message (empty string if no error)
     """
 
-    # ── Week 12 TODO ──────────────────────────────────────────────────────────
+    # ── Week 12 ──────────────────────────────────────────────────────────
     # Add input security before any processing happens.
     #
     # The RAG concept: always validate at the system boundary — the moment
@@ -218,8 +218,8 @@ def run_rag(query, conversation_history=None):
     #   2. grounding  = check_hallucination(answer, documents)
     #   Then replace the placeholder values below with these variables.
     # ─────────────────────────────────────────────────────────────────────────
-    confidence = 0.0  # Week 13: replace with calculate_confidence(distances)
-    grounding = {}    # Week 13: replace with check_hallucination(answer, documents)
+    confidence = calculate_confidence(distances) # Week 13: replace with calculate_confidence(distances)
+    grounding = check_hallucination(answer, documents) # Week 13: replace with check_hallucination(answer, documents)
 
     # ── Week 11 ──────────────────────────────────────────────────────────
     # Save this exchange to conversation history so follow-up questions work.

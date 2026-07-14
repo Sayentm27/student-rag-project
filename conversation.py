@@ -43,7 +43,7 @@ class ConversationHistory:
               Assistant: Python is a high-level programming language...
               User: Can you give an example?
         """
-        # TODO (Week 11): Build the formatted conversation string.
+        # (Week 11): Build the formatted conversation string.
         #
         # --- The RAG concept ---
         # We're about to paste this text directly into the Gemini prompt.
