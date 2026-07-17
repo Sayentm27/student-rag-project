@@ -201,11 +201,27 @@ def run_rag(query, conversation_history=None):
     #         "error": ""}
     # ─────────────────────────────────────────────────────────────────────────
 
+    documents, distances = filter_by_threshold(documents, distances, SIMILARITY_THRESHOLD)
+    if not has_relevant_results(documents):
+        return {
+            "answer": get_fallback_response(),
+            "sources": [],
+            "distances": [],
+            "confidence": 0.0,
+            "grounding": {"verdict": "N/A", "is_grounded": True, "warning": ""},
+            "error": ""
+        }
+    
     # ── Week 10: Core Generation — already complete ──────────────────────────
-    # Week 14: wrap this in try/except and call handle_api_error(e) on failure
-    answer = generate_answer(query, documents, conversation_history)
 
-    # ── Week 13 TODO ──────────────────────────────────────────────────────────
+    # Week 14: wrap this in try/except and call handle_api_error(e) on failure
+    try:
+        answer = generate_answer(query, documents, conversation_history)
+    except:
+        handle_api_error(e)
+        return get_fallback_response()
+
+    # ── Week 13 ──────────────────────────────────────────────────────────
     # Monitor the response quality after generation.
     #
     # The RAG concept: even with context, LLMs can hallucinate. We use

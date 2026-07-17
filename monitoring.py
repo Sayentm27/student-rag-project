@@ -109,6 +109,9 @@ def check_hallucination(answer, context_docs):
     except Exception as e:
         return {"verdict": "UNKNOWN", "is_grounded": True, "warning": ""}
     
+    # (Week 13) issue? : always getting "GROUNDED" for verdict, not "PARTIAL" or "HALLUCINATED"
+
+    
     #return {"verdict": "UNKNOWN", "is_grounded": True, "warning": ""}  # placeholder
 
 
