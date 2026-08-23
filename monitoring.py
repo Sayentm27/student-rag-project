@@ -69,8 +69,33 @@ def check_hallucination(answer, context_docs):
     #   6. Return the dict. Wrap everything in try/except — if this call fails,
     #      return: {"verdict": "UNKNOWN", "is_grounded": True, "warning": ""}
     #
-    return {"verdict": "UNKNOWN", "is_grounded": True, "warning": ""}  # placeholder
+    context = "\n\n".join([f"Document {i+1}: {doc}" for i, doc in enumerate(context_docs)])
+    prompt = f"""
+    You are a helpful assistant that evaluates the accuracy of the answer based on the context documents.
+    The answer is: {answer}
+    The context documents are: {context}
+    Grounded means the answer is fully supported by the context documents.
+    Partial means the answer is partially supported by the context documents.
+    Hallucinated means the answer is not supported by the context documents.
+    Please respond with exactly one word: GROUNDED, PARTIAL, or HALLUCINATED.
+    """
+    response = _client.models.generate_content(model=GEMINI_MODEL, contents=[prompt])
+    temperature=0.0
+    verdict = response.text.strip().upper()
+    if verdict not in ["GROUNDED", "PARTIAL", "HALLUCINATED"]:
+        verdict = "PARTIAL"
 
+    if verdict == "GROUNDED":
+        warning = ""
+    elif verdict == "PARTIAL":
+        warning = "Note: This answer may include some information beyond the provided sources."
+    elif verdict == "HALLUCINATED":
+        warning = "Warning: This answer may contain information not found in the source documents."
+    
+    try:
+        return {"verdict": verdict, "is_grounded": verdict == "GROUNDED", "warning": warning}
+    except Exception as e:
+        return {"verdict": "UNKNOWN", "is_grounded": True, "warning": ""}
 
 def calculate_confidence(distances):
     """
@@ -83,7 +108,7 @@ def calculate_confidence(distances):
     Returns:
         A float between 0.0 (not confident) and 1.0 (very confident).
     """
-    # TODO (Week 13): Implement the confidence score calculation.
+    # (Week 13): Implement the confidence score calculation.
     #
     # --- The RAG concept ---
     # When ChromaDB retrieves documents, it returns a "distance" for each one.
@@ -103,4 +128,8 @@ def calculate_confidence(distances):
     #   3. Apply the formula above
     #   4. Return the result rounded to 2 decimal places: round(confidence, 2)
     #
-    return 0.0  # placeholder — replace with your implementation
+    if not distances:
+        return 0.0
+    avg_distance = sum(distances) / len(distances)
+    confidence = max(0.0, 1.0 - (avg_distance / 2.0))
+    return round(confidence, 2)

@@ -209,7 +209,7 @@ def run_rag(query, conversation_history=None):
     # Week 14: wrap this in try/except and call handle_api_error(e) on failure
     answer = generate_answer(query, documents, conversation_history)
 
-    # ── Week 13 TODO ──────────────────────────────────────────────────────────
+    # ── Week 13 ──────────────────────────────────────────────────────────
     # Monitor the response quality after generation.
     #
     # The RAG concept: even with context, LLMs can hallucinate. We use
@@ -222,8 +222,8 @@ def run_rag(query, conversation_history=None):
     #   2. grounding  = check_hallucination(answer, documents)
     #   Then replace the placeholder values below with these variables.
     # ─────────────────────────────────────────────────────────────────────────
-    confidence = 0.0  # Week 13: replace with calculate_confidence(distances)
-    grounding = {}    # Week 13: replace with check_hallucination(answer, documents)
+    confidence = calculate_confidence(distances)  # Week 13: replace with calculate_confidence(distances)
+    grounding = check_hallucination(answer, documents)    # Week 13: replace with check_hallucination(answer, documents)
 
     # ── Week 11 ──────────────────────────────────────────────────────────
     # Save this exchange to conversation history so follow-up questions work.

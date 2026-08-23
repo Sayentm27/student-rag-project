@@ -13,7 +13,7 @@
 
 import re
 
-# TODO (Week 12): Fill in the BLOCKED_PATTERNS list.
+# (Week 12): Fill in the BLOCKED_PATTERNS list.
 #
 # --- The RAG/security concept ---
 # Think about what a prompt injection attack looks like.
@@ -51,7 +51,7 @@ def validate_input(query):
         (True, "")                    — query is safe, proceed
         (False, "error message")      — query is unsafe, show the error
     """
-    # TODO (Week 12): Implement three safety checks.
+    # (Week 12): Implement three safety checks.
     #
     # --- The RAG/security concept ---
     # We validate at the system boundary — the moment user input enters our app.
