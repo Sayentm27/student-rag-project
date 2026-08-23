@@ -19,7 +19,7 @@ GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 # --- Model Settings ---
 # The name of the AI model we use for generating answers.
 # gemini-2.5-flash is fast, capable, and available on the free tier.
-GEMINI_MODEL = "gemini-2.5-flash"
+GEMINI_MODEL = "gemini-3.5-flash-lite"
 
 # The name of the embedding model we use to turn text into numbers.
 # "all-MiniLM-L6-v2" is small, fast, and works well for semantic search.
