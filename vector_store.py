@@ -14,10 +14,16 @@
 import chromadb
 from config import COLLECTION_NAME
 
-# Create a ChromaDB client that stores data in memory.
-# This means the data is cleared when the app restarts, but our app
-# reloads the documents on startup automatically, so this works fine.
-_client = chromadb.Client()
+# Streamlit reloads Python modules during development, which would recreate an
+# empty in-memory client. app.py keeps the populated collection alive with
+# st.cache_resource and re-attaches it here on every run via bind_collection().
+_bound_collection = None
+
+
+def bind_collection(collection):
+    """Attach a cached ChromaDB collection for queries in this process."""
+    global _bound_collection
+    _bound_collection = collection
 
 
 def get_or_create_collection():
@@ -30,7 +36,11 @@ def get_or_create_collection():
     Returns:
         A ChromaDB Collection object.
     """
-    return _client.get_or_create_collection(name=COLLECTION_NAME)
+    if _bound_collection is not None:
+        return _bound_collection
+
+    client = chromadb.Client()
+    return client.get_or_create_collection(name=COLLECTION_NAME)
 
 
 def add_documents(documents, embeddings, ids):

@@ -63,10 +63,9 @@ class ConversationHistory:
         lines = []
         for message in recent:
             if message["role"] == "user":
-                line = f"User: {message['content']}"
-            if message["role"] == "assistant":
-                line = f"Assistant: {message['content']}"
-            lines.append(line)
+                lines.append(f"User: {message['content']}")
+            elif message["role"] == "assistant":
+                lines.append(f"Assistant: {message['content']}")
         #
         #   3. Join all lines with "\n" and return the result.
         #

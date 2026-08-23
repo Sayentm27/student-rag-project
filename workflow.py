@@ -21,11 +21,83 @@
 
 from google import genai
 from google.genai import types
+import re
 from config import GEMINI_API_KEY, GEMINI_MODEL
 from embeddings import embed_text
 from vector_store import query_similar
 
 _client = genai.Client(api_key=GEMINI_API_KEY)
+
+_FOLLOWUP_PRONOUNS = (
+    " it ", " its ", " that ", " this ", " they ", " them ", " those ", " these ",
+)
+_PRONOUN_RE = re.compile(
+    r"\b(it|its|that|this|they|them|those|these)\b", re.IGNORECASE
+)
+_KNOWN_TOPICS = (
+    ("python", "Python"),
+    ("machine learning", "machine learning"),
+    ("neural network", "neural networks"),
+    ("vector database", "vector databases"),
+    ("database", "databases"),
+    ("natural language processing", "NLP"),
+    ("large language model", "LLMs"),
+    ("api", "APIs"),
+    ("rag", "RAG"),
+    ("git", "Git"),
+)
+
+
+def extract_topic_from_context(conversation_context):
+    """Identify the main topic from recent conversation text."""
+    combined = conversation_context.lower()
+    for needle, label in _KNOWN_TOPICS:
+        if needle in combined:
+            return label
+
+    for line in reversed(conversation_context.splitlines()):
+        if line.startswith("User:"):
+            return line[len("User:"):].strip()
+
+    return ""
+
+
+def _needs_context_resolution(query):
+    """Return True if the query still relies on pronouns that need conversation context."""
+    padded = f" {query.lower()} "
+    return any(pronoun in padded for pronoun in _FOLLOWUP_PRONOUNS)
+
+
+def contextual_search_fallback(original_query, conversation_context):
+    """
+    Build a standalone search query from conversation history when a follow-up
+    question uses pronouns like 'it' or 'that' that won't embed well on their own.
+    """
+    if not conversation_context:
+        return original_query
+
+    topic = extract_topic_from_context(conversation_context)
+    if not topic:
+        return original_query
+
+    resolved = _PRONOUN_RE.sub(topic, original_query)
+    if resolved.lower() != original_query.lower():
+        return resolved
+
+    return f"{topic} {original_query}"
+
+
+def topic_search_query(conversation_context, original_query=""):
+    """Build a topic-focused search query for real-world follow-up questions."""
+    topic = extract_topic_from_context(conversation_context)
+    if not topic:
+        return original_query
+
+    query_lower = original_query.lower()
+    if any(word in query_lower for word in ("real world", "use case", "application", "else", "do")):
+        return f"{topic} real world applications use cases"
+
+    return f"{topic} {original_query}".strip()
 
 
 def rewrite_query(original_query, conversation_context=""):
@@ -61,7 +133,36 @@ def rewrite_query(original_query, conversation_context=""):
     #   4. Return response.text.strip() if it's not empty and under 500 chars
     #   5. Wrap in try/except — if anything fails, return original_query unchanged
     #
-    return original_query  # placeholder — query passes through unchanged
+    try:
+        prompt = (
+            "Rewrite this question into a clear, self-contained question suitable "
+            "for semantic search.\n"
+            "- Replace pronouns like 'it', 'that', or 'this' with the actual subject.\n"
+            "- Return only the rewritten question, with no explanation.\n\n"
+            f"Question: {original_query}"
+        )
+        if conversation_context:
+            prompt = (
+                f"{prompt}\n\nPrevious conversation (use this to resolve pronouns "
+                f"like 'it' or 'that'):\n{conversation_context}"
+            )
+        response = _client.models.generate_content(
+            model=GEMINI_MODEL,
+            contents=prompt,
+            config=types.GenerateContentConfig(temperature=0.1),
+        )
+        rewritten = (response.text or "").strip()
+        if rewritten and len(rewritten) < 500:
+            if conversation_context and _needs_context_resolution(rewritten):
+                return contextual_search_fallback(original_query, conversation_context)
+            return rewritten
+    except Exception:
+        pass
+
+    if conversation_context:
+        return contextual_search_fallback(original_query, conversation_context)
+    return original_query
+
 
 
 def decompose_query(query):
@@ -92,7 +193,25 @@ def decompose_query(query):
     #   4. Return at most 3 sub-questions
     #   5. Wrap in try/except — if anything fails, return [query]
     #
-    return [query]  # placeholder — query is not decomposed
+    try:
+        prompt = f"if this question, {query}, covers multiple topics, split it into 2-3 simpler sub-questions; otherwise return it as-is"
+        response = _client.models.generate_content(
+            model=GEMINI_MODEL,
+            contents=prompt,
+            config=types.GenerateContentConfig(temperature=0.1),
+        )
+
+        sub_questions = [
+            line.strip()
+            for line in response.text.splitlines()
+            if line.strip() and len(line.strip()) > 10
+        ]
+        if sub_questions:
+            return sub_questions[:3]
+    except Exception:
+        pass
+
+    return [query]
 
 
 def multi_hop_retrieve(query, n_per_hop=2):

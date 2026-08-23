@@ -13,8 +13,25 @@
 # This is called "separation of concerns" — each file has one job.
 
 import streamlit as st
-from rag_pipeline import initialize_vector_store, run_rag, get_feature_status
+from rag_pipeline import run_rag, get_feature_status
 from conversation import ConversationHistory
+from vector_store import bind_collection
+from config import COLLECTION_NAME
+from data_loader import get_documents, generate_ids
+from embeddings import embed_documents
+import chromadb
+
+
+@st.cache_resource
+def _create_vector_collection():
+    """Create and populate the in-memory vector store once per Streamlit session."""
+    client = chromadb.Client()
+    collection = client.get_or_create_collection(name=COLLECTION_NAME)
+    documents = get_documents()
+    ids = generate_ids(documents)
+    embeddings = embed_documents(documents)
+    collection.add(documents=documents, embeddings=embeddings, ids=ids)
+    return collection
 
 # --- Page Configuration ---
 # This must be the FIRST Streamlit command called in the script.
@@ -30,22 +47,23 @@ st.set_page_config(
 if "conversation_history" not in st.session_state:
     st.session_state.conversation_history = ConversationHistory()
 
-if "store_initialized" not in st.session_state:
-    st.session_state.store_initialized = False
-    st.session_state.doc_count = 0
-
 if "chat_messages" not in st.session_state:
     # This list stores messages for display purposes in the chat UI
     st.session_state.chat_messages = []
 
-# --- Initialize Vector Store (once per session) ---
-# We only load and embed documents on the very first run.
-# After that, the vector store stays in memory for the whole session.
-if not st.session_state.store_initialized:
+# Re-attach the cached Chroma collection on every rerun. Streamlit reloads
+# Python modules when files change; without this, the DB looks empty while
+# session state (including conversation history) still appears to work.
+if "vector_ready" not in st.session_state:
     with st.spinner("Loading knowledge base... (this may take a moment the first time)"):
-        doc_count = initialize_vector_store()
-        st.session_state.store_initialized = True
-        st.session_state.doc_count = doc_count
+        _vector_collection = _create_vector_collection()
+        bind_collection(_vector_collection)
+        st.session_state.vector_ready = True
+        st.session_state.doc_count = _vector_collection.count()
+else:
+    _vector_collection = _create_vector_collection()
+    bind_collection(_vector_collection)
+    st.session_state.doc_count = _vector_collection.count()
 
 # --- Sidebar ---
 with st.sidebar:

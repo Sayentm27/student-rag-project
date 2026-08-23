@@ -70,7 +70,7 @@ def get_fallback_response():
     Returns:
         A string explaining why no answer was generated and what to try instead.
     """
-    # TODO (Week 14): Write a graceful fallback message.
+    # (Week 14): Write a graceful fallback message.
     #
     # --- The RAG concept ---
     # When the filter removes all documents, there's nothing for the LLM to

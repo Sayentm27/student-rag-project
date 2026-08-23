@@ -33,7 +33,13 @@ from conversation import ConversationHistory
 from security import validate_input, sanitize_input
 from monitoring import check_hallucination, calculate_confidence
 from filters import filter_by_threshold, has_relevant_results, get_fallback_response, handle_api_error
-from workflow import rewrite_query
+from workflow import (
+    rewrite_query,
+    contextual_search_fallback,
+    topic_search_query,
+    extract_topic_from_context,
+    _needs_context_resolution,
+)
 
 _client = genai.Client(api_key=GEMINI_API_KEY)
 
@@ -48,6 +54,10 @@ def initialize_vector_store():
     Load all sample documents, embed them, and store them in ChromaDB.
     Called once when the app starts. After this, the vector store is ready.
     """
+    collection = get_or_create_collection()
+    if collection.count() > 0:
+        return collection.count()
+
     documents = get_documents()
     ids = generate_ids(documents)
     embeddings = embed_documents(documents)
@@ -132,6 +142,57 @@ Instructions:
 # The Week 10 core at the bottom already works.
 # ============================================================
 
+def retrieve_relevant_documents(query, history_context=""):
+    """
+    Retrieve documents, trying several query strategies for follow-up questions.
+    """
+    search_candidates = []
+
+    if history_context:
+        topic = extract_topic_from_context(history_context)
+        if topic:
+            search_candidates.append(topic)
+        if _needs_context_resolution(query):
+            search_candidates.append(contextual_search_fallback(query, history_context))
+        topic_query = topic_search_query(history_context, query)
+        if topic_query:
+            search_candidates.append(topic_query)
+
+    search_candidates.append(rewrite_query(query, history_context))
+
+    seen = set()
+    for search_query in search_candidates:
+        key = search_query.lower().strip()
+        if not key or key in seen:
+            continue
+        seen.add(key)
+
+        documents, distances = retrieve_context(search_query)
+        if not documents:
+            continue
+
+        filtered_docs, filtered_dists = filter_by_threshold(
+            documents, distances, SIMILARITY_THRESHOLD
+        )
+        if has_relevant_results(filtered_docs):
+            return filtered_docs, filtered_dists
+
+    if history_context:
+        topic = extract_topic_from_context(history_context)
+        for fallback_query in (
+            contextual_search_fallback(query, history_context),
+            topic,
+            topic_search_query(history_context, query),
+        ):
+            if not fallback_query:
+                continue
+            documents, distances = retrieve_context(fallback_query)
+            if documents:
+                return documents[:TOP_K_RESULTS], distances[:TOP_K_RESULTS]
+
+    return [], []
+
+
 def run_rag(query, conversation_history=None):
     """
     Run the full RAG pipeline for a user query.
@@ -160,12 +221,12 @@ def run_rag(query, conversation_history=None):
     #   3. Clean up the query: query = sanitize_input(query)
     # ─────────────────────────────────────────────────────────────────────────
     is_valid, error_message = validate_input(query)
-    if is_valid is not True:
+    if not is_valid:
         return {
             "answer": error_message, "sources": [], "distances": [],
-             "confidence": 0.0, "grounding": {}, "error": error_message
+            "confidence": 0.0, "grounding": {}, "error": error_message,
         }
-        query = sanitize_input(query)
+    query = sanitize_input(query)
 
     # ── Week 15 TODO ──────────────────────────────────────────────────────────
     # Rewrite the query before retrieval to improve embedding quality.
@@ -181,27 +242,12 @@ def run_rag(query, conversation_history=None):
     #            history_context = conversation_history.get_formatted_history()
     #   2. Rewrite: query = rewrite_query(query, history_context)
     # ─────────────────────────────────────────────────────────────────────────
+    history_context = ""
+    if conversation_history and len(conversation_history) > 0:
+        history_context = conversation_history.get_formatted_history()
 
-    # ── Week 10: Core Retrieval — already complete ───────────────────────────
-    documents, distances = retrieve_context(query)
+    documents, distances = retrieve_relevant_documents(query, history_context)
 
-    # ── Week 14 TODO ──────────────────────────────────────────────────────────
-    # Filter out documents that aren't similar enough to be useful.
-    #
-    # The RAG concept: ChromaDB always returns results even when nothing is
-    # relevant. Without filtering, we might generate an answer from completely
-    # unrelated documents. The threshold cuts off low-quality matches.
-    #
-    # Steps:
-    #   1. Filter: documents, distances = filter_by_threshold(documents, distances, SIMILARITY_THRESHOLD)
-    #   2. If not has_relevant_results(documents), return a fallback dict:
-    #        {"answer": get_fallback_response(), "sources": [], "distances": [],
-    #         "confidence": 0.0,
-    #         "grounding": {"verdict": "N/A", "is_grounded": True, "warning": ""},
-    #         "error": ""}
-    # ─────────────────────────────────────────────────────────────────────────
-
-    documents, distances = filter_by_threshold(documents, distances, SIMILARITY_THRESHOLD)
     if not has_relevant_results(documents):
         return {
             "answer": get_fallback_response(),
@@ -217,9 +263,22 @@ def run_rag(query, conversation_history=None):
     # Week 14: wrap this in try/except and call handle_api_error(e) on failure
     try:
         answer = generate_answer(query, documents, conversation_history)
-    except:
-        handle_api_error(e)
-        return get_fallback_response()
+    except Exception as e:
+        error_message = handle_api_error(e)
+        return {
+            "answer": error_message,
+            "sources": [],
+            "distances": [],
+            "confidence": 0.0,
+            "grounding": {},
+            "error": error_message,
+        }
+
+    # Save history immediately after a successful answer so monitoring
+    # failures cannot prevent follow-up questions from working.
+    if conversation_history:
+        conversation_history.add_message("user", query)
+        conversation_history.add_message("assistant", answer)
 
     # ── Week 13 ──────────────────────────────────────────────────────────
     # Monitor the response quality after generation.
@@ -236,21 +295,6 @@ def run_rag(query, conversation_history=None):
     # ─────────────────────────────────────────────────────────────────────────
     confidence = calculate_confidence(distances) # Week 13: replace with calculate_confidence(distances)
     grounding = check_hallucination(answer, documents) # Week 13: replace with check_hallucination(answer, documents)
-
-    # ── Week 11 ──────────────────────────────────────────────────────────
-    # Save this exchange to conversation history so follow-up questions work.
-    #
-    # The RAG concept: we store both sides of the exchange (user question AND
-    # assistant answer) so get_formatted_history() can include both in the
-    # next prompt. Without this step, history is never actually saved.
-    #
-    # Steps (only if conversation_history is not None):
-    #   conversation_history.add_message("user", query)
-    #   conversation_history.add_message("assistant", answer)
-    # ─────────────────────────────────────────────────────────────────────────
-    if conversation_history:
-        conversation_history.add_message("user", query)
-        conversation_history.add_message("assistant", answer)
 
     return {
         "answer": answer,
