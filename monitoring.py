@@ -35,7 +35,7 @@ def check_hallucination(answer, context_docs):
           - "is_grounded": True if verdict is GROUNDED, False otherwise
           - "warning":     A warning string to show the user (empty if grounded)
     """
-    # TODO (Week 13): Implement LLM-as-judge hallucination detection.
+    # (Week 13): Implement LLM-as-judge hallucination detection.
     #
     # --- The RAG concept ---
     # This is a key quality-control technique in RAG systems. We use Gemini
