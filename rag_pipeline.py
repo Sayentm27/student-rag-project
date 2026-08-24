@@ -185,7 +185,10 @@ def run_rag(query, conversation_history=None):
     #            history_context = conversation_history.get_formatted_history()
     #   2. Rewrite: query = rewrite_query(query, history_context)
     # ─────────────────────────────────────────────────────────────────────────
-
+    history_context = ""
+    if conversation_history and len(conversation_history) > 0:
+        history_context = conversation_history.get_formatted_history()
+    query = rewrite_query(query, history_context)
     # ── Week 10: Core Retrieval — already complete ───────────────────────────
     documents, distances = retrieve_context(query)
 

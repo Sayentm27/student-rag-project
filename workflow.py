@@ -61,7 +61,25 @@ def rewrite_query(original_query, conversation_context=""):
     #   4. Return response.text.strip() if it's not empty and under 500 chars
     #   5. Wrap in try/except — if anything fails, return original_query unchanged
     #
-    return original_query  # placeholder — query passes through unchanged
+    try:
+        if conversation_context:
+            prompt = f"""rewrite the question to be more specific and technical so it is suitable for semantic search
+            the question is: {query}
+            the context is: {conversation_context}
+
+            Example:
+            Original: What else can it do?
+            Rewritten: What are real-world applications of Python programming?
+            """
+        response = _client.models.generate_content(
+            model=GEMINI_MODEL,
+            contents=prompt,
+            config=types.GenerateContentConfig(temperature=0.1)
+        )
+        if response and len(response) < 500:
+            return response.text.strip()
+    except Exception:
+        return original_query  # placeholder — query passes through unchanged
 
 
 def decompose_query(query):
@@ -92,7 +110,21 @@ def decompose_query(query):
     #   4. Return at most 3 sub-questions
     #   5. Wrap in try/except — if anything fails, return [query]
     #
-    return [query]  # placeholder — query is not decomposed
+    try:
+        prompt = "if this question covers multiple topics, split it into 2-3 simpler sub-questions; otherwise return it as-is"
+        response = _client.models.generate_content(
+            model=GEMINI_MODEL,
+            contents=prompt,
+            config=types.GenerateContentConfig(temperature=0.1)
+        )
+        sub_queries = [
+            line.strip()
+            for line in response.text.splitlines()
+            if line.strip() and len(line.strip()) >= 500
+        ]
+        return sub_queries[:3]
+    except Exception:
+        return [query]  # placeholder — query is not decomposed
 
 
 def multi_hop_retrieve(query, n_per_hop=2):
